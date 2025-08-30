@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Malaya GPS Overlay</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      text-align: center;
+    }
+
+    input,
+    select,
+    button {
+      margin: 5px;
+      padding: 8px;
+      font-size: 14px;
+    }
+
+    .preview-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .capture {
+      width: 400px;
+      position: relative;
+      background: white;
+      overflow: hidden;
+      border: 1px solid #ccc;
+      box-shadow: 0 2px 5px rgba(28, 27, 27, 0.2);
+    }
+
+    .main-photo {
+      width: 400px;
+      height: 500px;
+      object-fit: fill;
+      display: block;
+      background-color: white;
+    }
+
+    .gps-footer {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      width: 380px;
+      background-color: rgba(44, 44, 44, 0.85);
+      color: white;
+      display: flex;
+      align-items: flex-start;
+      padding: 8px 8px 8px 0px;
+      font-size: 11px;
+      box-sizing: border-box;
+    }
+
+    .map-thumbnail {
+      width: 80px;
+      height: 55px;
+      object-fit: contain;
+      margin-right: 5px;
+    }
+
+    .gps-details {
+      flex-grow: 1;
+      line-height: 1.3;
+      text-align: left;
+      width: 100px;
+    }
+
+    .gps-details b {
+      font-family: Georgia, serif;
+      font-size: 13px;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .gps-logo {
+      display: flex;
+      align-items: center;
+      font-size: 10px;
+      font-family: Arial, sans-serif;
+      margin-left: 6px;
+      margin-top: 4px;
+    }
+
+    .gps-logo-icon {
+      width: 20px;
+      height: 20px;
+      margin-right: 4px;
+    }
+
+    .download-btn {
+      margin-top: 15px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 4px;
+      padding: 8px 16px;
+      font-size: 14px;
+    }
+
+    .download-btn:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h2>Malaya GPS Overlay</h2>
+
+  <div class="form-container">
+    <input type="file" id="imageUpload" accept="image/*" multiple />
+    <br />
+    <input type="text" id="city" placeholder="City (e.g. Ārifwāla)" />
+    <input type="text" id="address" placeholder="Address" />
+    <br />
+    <input type="text" id="latitude" placeholder="Latitude (e.g. 30.297783)" />
+    <input type="text" id="longitude" placeholder="Longitude (e.g. 73.057033)" />
+    <!-- New dropdown for fixed digits -->
+    <select id="fixedDigits">
+      <option value="1">1 digit fixed</option>
+      <option value="2">2 digits fixed</option>
+      <option value="3">3 digits fixed</option>
+      <option value="4" selected>4 digits fixed (default)</option>
+    </select>
+    <br />
+    <input type="text" id="date" placeholder="DD/MM/YYYY" maxlength="10" />
+    <input type="text" id="time" placeholder="HH:MM" maxlength="5" />
+    <select id="ampm">
+      <option value="AM">AM</option>
+      <option value="PM">PM</option>
+    </select>
+  </div>
+
+  <button class="download-btn" onclick="downloadAll()">Download All (ZIP)</button>
+
+  <div class="preview-container" id="previewContainer"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <script>
+    let imagesData = [];
+
+    document.getElementById("imageUpload").addEventListener("change", handleFiles);
+
+    function handleFiles(event) {
+      const files = event.target.files;
+      if (!files.length) return;
+      imagesData = [];
+      document.getElementById("previewContainer").innerHTML = "";
+
+      Array.from(files).forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const container = document.createElement("div");
+          container.className = "capture";
+          container.innerHTML = `
+          <img src="${e.target.result}" class="main-photo" />
+          <div class="gps-footer">
+            <img src="data/icon2.png" alt="Map" class="map-thumbnail" />
+            <div class="gps-details">
+              <b class="gps-location"></b>
+              <span class="gps-pluscode"></span>
+              <span class="gps-address"></span><br />
+              Lat <span class="gps-lat"></span>° Long <span class="gps-lng"></span>°<br />
+              <span class="gps-datetime"></span>
+            </div>
+            <div class="gps-logo">
+              <img src="data/icon3.png" alt="GPS Icon" class="gps-logo-icon" />
+              <span>GPS Smart</span>
+            </div>
+          </div>
+        `;
+          document.getElementById("previewContainer").appendChild(container);
+          imagesData.push(container);
+          updateOverlay();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ✅ Randomize after user-specified fixed decimal digits
+    function randomizeCoord(coord) {
+      let [intPart, decPart] = coord.split(".");
+      if (!decPart) decPart = "000000";
+
+      let fixedCount = parseInt(document.getElementById("fixedDigits").value) || 4;
+      if (fixedCount > decPart.length) fixedCount = decPart.length;
+
+      let fixed = decPart.slice(0, fixedCount);
+      let remaining = decPart.length - fixedCount;
+
+      let rand = Math.floor(Math.random() * Math.pow(10, remaining));
+      let randStr = String(rand).padStart(remaining, "0");
+
+      return intPart + "." + fixed + randStr;
+    }
+
+    // ✅ Generate code like 123b +7rt (lowercase consonants only)
+    function generatePlusCode() {
+      const consonants = "bcdfghjklmnpqrstvwxyz"; // no vowels
+
+      const randDigit = (len) =>
+        String(Math.floor(Math.random() * Math.pow(10, len))).padStart(len, "0");
+      const randConsonant = () =>
+        consonants[Math.floor(Math.random() * consonants.length)];
+
+      const part1 = randDigit(3);
+      const part2 = randConsonant(); 
+      const part3 = randDigit(1);
+      const part4 = randConsonant() + randConsonant();
+
+      return `${part1}${part2} + ${part3}${part4}`;
+    }
+
+    function randomizeTime() {
+      let start = 8 * 60;
+      let end = 16 * 60;
+      let randMinutes = Math.floor(Math.random() * (end - start + 1)) + start;
+
+      let hour24 = Math.floor(randMinutes / 60);
+      let minute = randMinutes % 60;
+
+      let ampm = hour24 >= 12 ? "PM" : "AM";
+      let hour12 = hour24 % 12;
+      if (hour12 === 0) hour12 = 12;
+
+      return `${hour12}:${String(minute).padStart(2, "0")} ${ampm}`;
+    }
+
+    function formatTimeWithAMPM(timeVal, ampmVal) {
+      if (!timeVal) return randomizeTime();
+      let [h, m] = timeVal.split(":");
+      let hour = parseInt(h, 10);
+      let minute = parseInt(m, 10);
+      if (isNaN(hour) || isNaN(minute)) return randomizeTime();
+      return `${hour}:${String(minute).padStart(2, "0")} ${ampmVal}`;
+    }
+
+    function updateOverlay() {
+      const city = document.getElementById('city').value.trim() || 'Ārifwāla';
+      const address = document.getElementById('address').value.trim() || '';
+      const baseLat = document.getElementById('latitude').value.trim() || '30.297293';
+      const baseLng = document.getElementById('longitude').value.trim() || '73.066914';
+      const date = document.getElementById('date').value.trim() || '11/08/2025';
+      const manualTime = document.getElementById('time').value;
+      const ampm = document.getElementById('ampm').value;
+
+      imagesData.forEach((container, index) => {
+        let lat, lng, timeStr, plusCode;
+
+        if (index === 0) {
+          lat = baseLat;
+          lng = baseLng;
+          timeStr = formatTimeWithAMPM(manualTime, ampm);
+        } else {
+          lat = randomizeCoord(baseLat);
+          lng = randomizeCoord(baseLng);
+          timeStr = randomizeTime();
+        }
+
+        plusCode = generatePlusCode();
+
+        container.querySelector(".gps-location").innerText = `${city}, Punjab, Pakistan`;
+        container.querySelector(".gps-pluscode").innerText = plusCode;
+        container.querySelector(".gps-address").innerText = `${address}, ${city}, Punjab, Pakistan`;
+        container.querySelector(".gps-lat").innerText = lat;
+        container.querySelector(".gps-lng").innerText = lng;
+        container.querySelector(".gps-datetime").innerText = `${date} ${timeStr} GMT +05:00`;
+      });
+    }
+
+    const fields = ['city', 'address', 'latitude', 'longitude', 'date', 'time', 'ampm', 'fixedDigits'];
+    fields.forEach(id => {
+      document.getElementById(id).addEventListener('input', updateOverlay);
+      document.getElementById(id).addEventListener('change', updateOverlay);
+    });
+
+    function downloadAll() {
+  let zip = new JSZip();
+  let count = 0;
+  let totalImages = imagesData.length;
+
+  if (totalImages === 0) {
+    alert("No images to download!");
+    return;
+  }
+
+  imagesData.forEach((captureDiv, i) => {
+    html2canvas(captureDiv, { useCORS: true, scale: 2 }).then((canvas) => {
+      if (!canvas) {
+        console.error(`Error rendering canvas for image ${i+1}`);
+        return;
+      }
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          console.error(`Error creating Blob for image ${i+1}`);
+          return;
+        }
+        zip.file("gps-image-" + (i + 1) + ".png", blob);
+        count++;
+
+        if (count === totalImages) {
+          zip.generateAsync({ type: "blob" }).then((content) => {
+            saveAs(content, "gps-images.zip");
+          }).catch((err) => {
+            console.error("Error generating ZIP file:", err);
+          });
+        }
+      });
+    }).catch((err) => {
+      console.error(`Error rendering canvas for image ${i + 1}:`, err);
+    });
+  });
+}
+
+  </script>
+</body>
+
+</html>
