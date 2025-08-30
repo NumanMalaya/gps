@@ -214,7 +214,7 @@
         consonants[Math.floor(Math.random() * consonants.length)];
 
       const part1 = randDigit(3);
-      const part2 = randConsonant(); 
+      const part2 = randConsonant();
       const part3 = randDigit(1);
       const part4 = randConsonant() + randConsonant();
 
@@ -294,33 +294,53 @@
     return;
   }
 
-  imagesData.forEach((captureDiv, i) => {
-    html2canvas(captureDiv, { useCORS: true, scale: 2 }).then((canvas) => {
-      if (!canvas) {
-        console.error(`Error rendering canvas for image ${i+1}`);
-        return;
-      }
+  if (totalImages === 1) {
+    // Single image download (direct PNG)
+    html2canvas(imagesData[0], { useCORS: true, scale: 2 }).then((canvas) => {
       canvas.toBlob((blob) => {
         if (!blob) {
-          console.error(`Error creating Blob for image ${i+1}`);
+          console.error("Error creating Blob for the image.");
           return;
         }
-        zip.file("gps-image-" + (i + 1) + ".png", blob);
-        count++;
-
-        if (count === totalImages) {
-          zip.generateAsync({ type: "blob" }).then((content) => {
-            saveAs(content, "gps-images.zip");
-          }).catch((err) => {
-            console.error("Error generating ZIP file:", err);
-          });
-        }
-      });
+        // Download the single image as PNG
+        saveAs(blob, "gps-image-1.png");
+      }, "image/png");
     }).catch((err) => {
-      console.error(`Error rendering canvas for image ${i + 1}:`, err);
+      console.error("Error rendering canvas for the single image:", err);
     });
-  });
+  } else {
+    // Multiple images download (ZIP)
+    imagesData.forEach((captureDiv, i) => {
+      html2canvas(captureDiv, { useCORS: true, scale: 2 }).then((canvas) => {
+        if (!canvas) {
+          console.error(`Error rendering canvas for image ${i+1}`);
+          return;
+        }
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            console.error(`Error creating Blob for image ${i+1}`);
+            return;
+          }
+          // Ensure the image is saved as PNG in the ZIP
+          zip.file("gps-image-" + (i + 1) + ".png", blob, { binary: true });
+          count++;
+
+          if (count === totalImages) {
+            zip.generateAsync({ type: "blob" }).then((content) => {
+              saveAs(content, "gps-images.zip");
+            }).catch((err) => {
+              console.error("Error generating ZIP file:", err);
+            });
+          }
+        }, "image/png");
+      }).catch((err) => {
+        console.error(`Error rendering canvas for image ${i + 1}:`, err);
+      });
+    });
+  }
 }
+
+
 
   </script>
 </body>
