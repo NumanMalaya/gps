@@ -108,6 +108,30 @@
     .download-btn:hover {
       background-color: #0056b3;
     }
+
+    /* Progress Bar */
+    .progress-container {
+      width: 80%;
+      max-width: 400px;
+      height: 20px;
+      background: #ddd;
+      border-radius: 10px;
+      margin: 20px auto;
+      display: none;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #007bff, #00d4ff);
+      transition: width 0.3s ease;
+    }
+
+    .progress-text {
+      margin-top: 5px;
+      font-size: 13px;
+    }
   </style>
 </head>
 
@@ -123,7 +147,6 @@
     <br />
     <input type="text" id="latitude" placeholder="Latitude (e.g. 30.297783)" />
     <input type="text" id="longitude" placeholder="Longitude (e.g. 73.057033)" />
-    <!-- New dropdown for fixed digits -->
     <select id="fixedDigits">
       <option value="1">1 digit fixed</option>
       <option value="2">2 digits fixed</option>
@@ -131,7 +154,15 @@
       <option value="4" selected>4 digits fixed (default)</option>
     </select>
     <br />
+
+    <!-- Date Options -->
     <input type="text" id="date" placeholder="DD/MM/YYYY" maxlength="10" />
+    <select id="dateMode">
+      <option value="fixed" selected>Same Date</option>
+      <option value="consecutive">Consecutive Dates</option>
+    </select>
+    <br />
+
     <input type="text" id="time" placeholder="HH:MM" maxlength="5" />
     <select id="ampm">
       <option value="AM">AM</option>
@@ -139,7 +170,13 @@
     </select>
   </div>
 
-  <button class="download-btn" onclick="downloadAll()">Download All (ZIP)</button>
+  <button class="download-btn" onclick="downloadAll()">Download</button>
+
+  <!-- Progress Bar -->
+  <div class="progress-container" id="progressContainer">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+  <div class="progress-text" id="progressText"></div>
 
   <div class="preview-container" id="previewContainer"></div>
 
@@ -157,28 +194,36 @@
       imagesData = [];
       document.getElementById("previewContainer").innerHTML = "";
 
+      // ✅ Reset progress
+      const progressContainer = document.getElementById("progressContainer");
+      const progressBar = document.getElementById("progressBar");
+      const progressText = document.getElementById("progressText");
+      progressContainer.style.display = "none";
+      progressBar.style.width = "0%";
+      progressText.innerText = "";
+
       Array.from(files).forEach((file) => {
         const reader = new FileReader();
         reader.onload = function (e) {
           const container = document.createElement("div");
           container.className = "capture";
           container.innerHTML = `
-          <img src="${e.target.result}" class="main-photo" />
-          <div class="gps-footer">
-            <img src="data/icon2.png" alt="Map" class="map-thumbnail" />
-            <div class="gps-details">
-              <b class="gps-location"></b>
-              <span class="gps-pluscode"></span>
-              <span class="gps-address"></span><br />
-              Lat <span class="gps-lat"></span>° Long <span class="gps-lng"></span>°<br />
-              <span class="gps-datetime"></span>
+            <img src="${e.target.result}" class="main-photo" />
+            <div class="gps-footer">
+              <img src="data/icon2.png" alt="Map" class="map-thumbnail" />
+              <div class="gps-details">
+                <b class="gps-location"></b>
+                <span class="gps-pluscode"></span>
+                <span class="gps-address"></span><br />
+                Lat <span class="gps-lat"></span>° Long <span class="gps-lng"></span>°<br />
+                <span class="gps-datetime"></span>
+              </div>
+              <div class="gps-logo">
+                <img src="data/icon3.png" alt="GPS Icon" class="gps-logo-icon" />
+                <span>GPS Smart</span>
+              </div>
             </div>
-            <div class="gps-logo">
-              <img src="data/icon3.png" alt="GPS Icon" class="gps-logo-icon" />
-              <span>GPS Smart</span>
-            </div>
-          </div>
-        `;
+          `;
           document.getElementById("previewContainer").appendChild(container);
           imagesData.push(container);
           updateOverlay();
@@ -187,52 +232,39 @@
       });
     }
 
-    // ✅ Randomize after user-specified fixed decimal digits
     function randomizeCoord(coord) {
       let [intPart, decPart] = coord.split(".");
       if (!decPart) decPart = "000000";
-
       let fixedCount = parseInt(document.getElementById("fixedDigits").value) || 4;
       if (fixedCount > decPart.length) fixedCount = decPart.length;
-
       let fixed = decPart.slice(0, fixedCount);
       let remaining = decPart.length - fixedCount;
-
       let rand = Math.floor(Math.random() * Math.pow(10, remaining));
       let randStr = String(rand).padStart(remaining, "0");
-
       return intPart + "." + fixed + randStr;
     }
 
-    // ✅ Generate code like 123b +7rt (lowercase consonants only)
     function generatePlusCode() {
-      const consonants = "bcdfghjklmnpqrstvwxyz"; // no vowels
-
+      const consonants = "bcdfghjklmnpqrstvwxyz";
       const randDigit = (len) =>
         String(Math.floor(Math.random() * Math.pow(10, len))).padStart(len, "0");
       const randConsonant = () =>
         consonants[Math.floor(Math.random() * consonants.length)];
-
       const part1 = randDigit(3);
       const part2 = randConsonant();
       const part3 = randDigit(1);
       const part4 = randConsonant() + randConsonant();
-
       return `${part1}${part2} + ${part3}${part4}`;
     }
 
     function randomizeTime() {
-      let start = 8 * 60;
-      let end = 16 * 60;
+      let start = 8 * 60, end = 16 * 60;
       let randMinutes = Math.floor(Math.random() * (end - start + 1)) + start;
-
       let hour24 = Math.floor(randMinutes / 60);
       let minute = randMinutes % 60;
-
       let ampm = hour24 >= 12 ? "PM" : "AM";
       let hour12 = hour24 % 12;
       if (hour12 === 0) hour12 = 12;
-
       return `${hour12}:${String(minute).padStart(2, "0")} ${ampm}`;
     }
 
@@ -245,17 +277,50 @@
       return `${hour}:${String(minute).padStart(2, "0")} ${ampmVal}`;
     }
 
+    function getTodayDate() {
+      const today = new Date();
+      let dd = String(today.getDate()).padStart(2, '0');
+      let mm = String(today.getMonth() + 1).padStart(2, '0');
+      let yyyy = today.getFullYear();
+      return `${dd}/${mm}/${yyyy}`;
+    }
+
+    function addDaysSkippingSundays(baseDate, imagesCount) {
+      const [dd, mm, yyyy] = baseDate.split("/").map(Number);
+      let dateObj = new Date(yyyy, mm - 1, dd);
+      let dates = [];
+      while (dates.length < imagesCount) {
+        let day = dateObj.getDay(); // 0 = Sunday
+        if (!(dates.length > 0 && day === 0)) {
+          dates.push(
+            `${String(dateObj.getDate()).padStart(2, "0")}/${String(dateObj.getMonth() + 1).padStart(2, "0")}/${dateObj.getFullYear()}`
+          );
+        }
+        dateObj.setDate(dateObj.getDate() + 1);
+      }
+      return dates;
+    }
+
     function updateOverlay() {
       const city = document.getElementById('city').value.trim() || 'Ārifwāla';
       const address = document.getElementById('address').value.trim() || '';
       const baseLat = document.getElementById('latitude').value.trim() || '30.297293';
       const baseLng = document.getElementById('longitude').value.trim() || '73.066914';
-      const date = document.getElementById('date').value.trim() || '11/08/2025';
+
+      const dateInput = document.getElementById('date').value.trim();
+      const baseDate = dateInput || getTodayDate();
+      const dateMode = document.getElementById('dateMode').value;
+
       const manualTime = document.getElementById('time').value;
       const ampm = document.getElementById('ampm').value;
 
+      let consecutiveDates = [];
+      if (dateMode === "consecutive") {
+        consecutiveDates = addDaysSkippingSundays(baseDate, imagesData.length);
+      }
+
       imagesData.forEach((container, index) => {
-        let lat, lng, timeStr, plusCode;
+        let lat, lng, timeStr, plusCode, dateStr;
 
         if (index === 0) {
           lat = baseLat;
@@ -267,6 +332,12 @@
           timeStr = randomizeTime();
         }
 
+        if (dateMode === "fixed") {
+          dateStr = baseDate;
+        } else {
+          dateStr = consecutiveDates[index];
+        }
+
         plusCode = generatePlusCode();
 
         container.querySelector(".gps-location").innerText = `${city}, Punjab, Pakistan`;
@@ -274,75 +345,78 @@
         container.querySelector(".gps-address").innerText = `${address}, ${city}, Punjab, Pakistan`;
         container.querySelector(".gps-lat").innerText = lat;
         container.querySelector(".gps-lng").innerText = lng;
-        container.querySelector(".gps-datetime").innerText = `${date} ${timeStr} GMT +05:00`;
+        container.querySelector(".gps-datetime").innerText = `${dateStr} ${timeStr} GMT +05:00`;
       });
     }
 
-    const fields = ['city', 'address', 'latitude', 'longitude', 'date', 'time', 'ampm', 'fixedDigits'];
+    const fields = ['city', 'address', 'latitude', 'longitude', 'date', 'time', 'ampm', 'fixedDigits', 'dateMode'];
     fields.forEach(id => {
       document.getElementById(id).addEventListener('input', updateOverlay);
       document.getElementById(id).addEventListener('change', updateOverlay);
     });
 
-    function downloadAll() {
-  let zip = new JSZip();
-  let count = 0;
-  let totalImages = imagesData.length;
+    // ✅ Optimized Sequential Download with batching
+    async function downloadAll() {
+      let totalImages = imagesData.length;
+      if (totalImages === 0) {
+        alert("No images to download!");
+        return;
+      }
 
-  if (totalImages === 0) {
-    alert("No images to download!");
-    return;
-  }
+      const progressContainer = document.getElementById("progressContainer");
+      const progressBar = document.getElementById("progressBar");
+      const progressText = document.getElementById("progressText");
 
-  if (totalImages === 1) {
-    // Single image download (direct PNG)
-    html2canvas(imagesData[0], { useCORS: true, scale: 2 }).then((canvas) => {
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          console.error("Error creating Blob for the image.");
-          return;
-        }
-        // Download the single image as PNG
-        saveAs(blob, "gps-image-1.png");
-      }, "image/png");
-    }).catch((err) => {
-      console.error("Error rendering canvas for the single image:", err);
-    });
-  } else {
-    // Multiple images download (ZIP)
-    imagesData.forEach((captureDiv, i) => {
-      html2canvas(captureDiv, { useCORS: true, scale: 2 }).then((canvas) => {
-        if (!canvas) {
-          console.error(`Error rendering canvas for image ${i+1}`);
-          return;
-        }
+      progressContainer.style.display = "block";
+      progressBar.style.width = "0%";
+      progressText.innerText = "Starting...";
+
+      // Single image case
+      if (totalImages === 1) {
+        const canvas = await html2canvas(imagesData[0], { useCORS: true, scale: 1 });
         canvas.toBlob((blob) => {
-          if (!blob) {
-            console.error(`Error creating Blob for image ${i+1}`);
-            return;
-          }
-          // Ensure the image is saved as PNG in the ZIP
-          zip.file("gps-image-" + (i + 1) + ".png", blob, { binary: true });
-          count++;
-
-          if (count === totalImages) {
-            zip.generateAsync({ type: "blob" }).then((content) => {
-              saveAs(content, "gps-images.zip");
-            }).catch((err) => {
-              console.error("Error generating ZIP file:", err);
-            });
-          }
+          saveAs(blob, "gps-image-1.png");
+          progressBar.style.width = "100%";
+          progressText.innerText = "Download complete!";
         }, "image/png");
-      }).catch((err) => {
-        console.error(`Error rendering canvas for image ${i + 1}:`, err);
-      });
-    });
-  }
-}
+        return;
+      }
 
+      // Multiple → batch into chunks
+      const batchSize = 50;
+      let zipIndex = 1;
 
+      for (let start = 0; start < totalImages; start += batchSize) {
+        let zip = new JSZip();
+        const end = Math.min(start + batchSize, totalImages);
 
+        for (let i = start; i < end; i++) {
+          progressText.innerText = `Processing ${i + 1}/${totalImages}...`;
+
+          const canvas = await html2canvas(imagesData[i], { useCORS: true, scale: 1 });
+
+          await new Promise((resolve) => {
+            canvas.toBlob((blob) => {
+              zip.file(`gps-image-${i + 1}.png`, blob, { binary: true });
+              let percent = Math.round(((i + 1) / totalImages) * 100);
+              progressBar.style.width = percent + "%";
+              resolve();
+            }, "image/png");
+          });
+        }
+
+        progressText.innerText = `Finalizing ZIP ${zipIndex}...`;
+        const content = await zip.generateAsync({
+          type: "blob",
+          compression: "STORE" // 🚀 Faster, no compression
+        });
+        saveAs(content, `gps-images-part${zipIndex}.zip`);
+        zipIndex++;
+      }
+
+      progressBar.style.width = "100%";
+      progressText.innerText = "All downloads complete!";
+    }
   </script>
 </body>
-
 </html>
