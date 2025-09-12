@@ -132,6 +132,7 @@
       margin-top: 5px;
       font-size: 13px;
     }
+
   </style>
 </head>
 
@@ -191,10 +192,8 @@
     function handleFiles(event) {
       const files = event.target.files;
       if (!files.length) return;
-      imagesData = [];
-      document.getElementById("previewContainer").innerHTML = "";
 
-      // ✅ Reset progress
+      // ✅ Reset progress only, don't clear imagesData
       const progressContainer = document.getElementById("progressContainer");
       const progressBar = document.getElementById("progressBar");
       const progressText = document.getElementById("progressText");
@@ -227,11 +226,13 @@
           document.getElementById("previewContainer").appendChild(container);
           imagesData.push(container);
           updateOverlay();
+          document.getElementById('imageCount').innerText = `${imagesData.length} images added`;
         };
         reader.readAsDataURL(file);
       });
     }
 
+    // --- All your previous functions remain unchanged ---
     function randomizeCoord(coord) {
       let [intPart, decPart] = coord.split(".");
       if (!decPart) decPart = "000000";
@@ -290,7 +291,7 @@
       let dateObj = new Date(yyyy, mm - 1, dd);
       let dates = [];
       while (dates.length < imagesCount) {
-        let day = dateObj.getDay(); // 0 = Sunday
+        let day = dateObj.getDay();
         if (!(dates.length > 0 && day === 0)) {
           dates.push(
             `${String(dateObj.getDate()).padStart(2, "0")}/${String(dateObj.getMonth() + 1).padStart(2, "0")}/${dateObj.getFullYear()}`
@@ -355,7 +356,6 @@
       document.getElementById(id).addEventListener('change', updateOverlay);
     });
 
-    // ✅ Optimized Sequential Download with batching
     async function downloadAll() {
       let totalImages = imagesData.length;
       if (totalImages === 0) {
@@ -371,18 +371,17 @@
       progressBar.style.width = "0%";
       progressText.innerText = "Starting...";
 
-      // Single image case
       if (totalImages === 1) {
-        const canvas = await html2canvas(imagesData[0], { useCORS: true, scale: 1 });
+        const canvas = await html2canvas(imagesData[0], { useCORS: true, scale: 0.8 });
         canvas.toBlob((blob) => {
           saveAs(blob, "gps-image-1.png");
           progressBar.style.width = "100%";
           progressText.innerText = "Download complete!";
+          setTimeout(() => { progressContainer.style.display = "none"; }, 4000);
         }, "image/png");
         return;
       }
 
-      // Multiple → batch into chunks
       const batchSize = 50;
       let zipIndex = 1;
 
@@ -393,7 +392,7 @@
         for (let i = start; i < end; i++) {
           progressText.innerText = `Processing ${i + 1}/${totalImages}...`;
 
-          const canvas = await html2canvas(imagesData[i], { useCORS: true, scale: 1 });
+          const canvas = await html2canvas(imagesData[i], { useCORS: true, scale: 0.8 });
 
           await new Promise((resolve) => {
             canvas.toBlob((blob) => {
@@ -402,13 +401,15 @@
               progressBar.style.width = percent + "%";
               resolve();
             }, "image/png");
+
+            setTimeout(() => { canvas.width = canvas.height = 0; }, 100);
           });
         }
 
         progressText.innerText = `Finalizing ZIP ${zipIndex}...`;
         const content = await zip.generateAsync({
           type: "blob",
-          compression: "STORE" // 🚀 Faster, no compression
+          compression: "STORE"
         });
         saveAs(content, `gps-images-part${zipIndex}.zip`);
         zipIndex++;
@@ -416,7 +417,9 @@
 
       progressBar.style.width = "100%";
       progressText.innerText = "All downloads complete!";
+      setTimeout(() => { progressContainer.style.display = "none"; }, 4000);
     }
   </script>
 </body>
+
 </html>
